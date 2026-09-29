@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator,EmailStr
 from datetime import date
 
 
@@ -93,11 +93,6 @@ class PropertyUpdate(BaseModel):
 class BookingCreate(BaseModel):
     property_id: int = Field(gt=0)
 
-    guest_name: str = Field(
-        min_length=2,
-        max_length=100,
-    )
-
     check_in: date
     check_out: date
 
@@ -119,7 +114,7 @@ class BookingCreate(BaseModel):
 class BookingResponse(BaseModel):
     id: int
     property_id: int
-    guest_name: str
+    user_id:int
     check_in: date
     check_out: date
     guests: int
@@ -129,3 +124,34 @@ class BookingResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True
     )
+
+class UserCreate(BaseModel):
+    name: str = Field(
+        min_length=2,
+        max_length=100,
+    )
+
+    email: EmailStr
+
+    password: str = Field(
+        min_length=8,
+        max_length=128,
+    )
+
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str

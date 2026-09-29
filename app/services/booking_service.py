@@ -3,27 +3,37 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.schemas import BookingCreate
+from app.exceptions import (
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 
 
 def create_booking(
     db: Session,
     booking_data: BookingCreate,
+    user_id: int,
 ) -> models.Booking:
 
-    # 1. Find the property
+    # 1. Find and lock the property
     property_obj = db.execute(
-        select(models.Property).where(
+        select(models.Property)
+        .where(
             models.Property.id == booking_data.property_id
         )
         .with_for_update()
     ).scalar_one_or_none()
 
     if property_obj is None:
-        raise ValueError("Property not found")
+        raise NotFoundError(
+            "Property not found"
+        )
 
     # 2. Validate number of guests
     if booking_data.guests > property_obj.max_guests:
-        raise ValueError(
+        raise ValidationError(
             f"Property allows a maximum of "
             f"{property_obj.max_guests} guests"
         )
@@ -49,7 +59,7 @@ def create_booking(
     ).scalar_one_or_none()
 
     if overlapping_booking is not None:
-        raise ValueError(
+        raise ConflictError(
             "Property is already booked for "
             "the selected dates"
         )
@@ -69,7 +79,7 @@ def create_booking(
     # 6. Create booking
     booking = models.Booking(
         property_id=booking_data.property_id,
-        guest_name=booking_data.guest_name,
+        user_id=user_id,
         check_in=booking_data.check_in,
         check_out=booking_data.check_out,
         guests=booking_data.guests,
@@ -83,25 +93,32 @@ def create_booking(
     try:
         db.commit()
         db.refresh(booking)
-
         return booking
 
     except Exception:
         db.rollback()
         raise
 
+
 def get_booking(
     db: Session,
     booking_id: int,
-) -> models.Booking | None:
+) -> models.Booking:
 
     statement = select(models.Booking).where(
         models.Booking.id == booking_id
     )
 
-    return db.execute(
+    booking = db.execute(
         statement
     ).scalar_one_or_none()
+
+    if booking is None:
+        raise NotFoundError(
+            "Booking not found"
+        )
+
+    return booking
 
 
 def get_property_bookings(
@@ -125,26 +142,54 @@ def get_property_bookings(
         .all()
     )
 
+
+def get_user_bookings(
+    db: Session,
+    user_id: int,
+) -> list[models.Booking]:
+
+    statement = (
+        select(models.Booking)
+        .where(
+            models.Booking.user_id == user_id
+        )
+        .order_by(
+            models.Booking.created_at.desc()
+        )
+    )
+
+    return (
+        db.execute(statement)
+        .scalars()
+        .all()
+    )
+
+
 def cancel_booking(
     db: Session,
     booking_id: int,
-) -> models.Booking | None:
+    user_id: int,
+) -> models.Booking:
 
     booking = get_booking(
         db=db,
         booking_id=booking_id,
     )
 
-    if booking is None:
-        return None
+    # Authorization
+    if booking.user_id != user_id:
+        raise AuthorizationError(
+            "You are not allowed to modify this booking"
+        )
 
+    # State validation
     if booking.status == "CANCELLED":
-        raise ValueError(
+        raise ConflictError(
             "Booking is already cancelled"
         )
 
     if booking.status != "PENDING":
-        raise ValueError(
+        raise ConflictError(
             "Only pending bookings can be cancelled"
         )
 

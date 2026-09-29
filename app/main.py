@@ -6,7 +6,8 @@ from app import models
 from pydantic import BaseModel, Field
 from app.api.routes.bookings import router as booking_router
 from app.api.routes.listings import router as listing_router
-
+from app.api.routes.auth import router as auth_router
+from app.exception_handlers import register_exception_handlers
 
 class PropertyCreate(BaseModel):
     title: str = Field(min_length=3, max_length=100)
@@ -16,9 +17,11 @@ class PropertyCreate(BaseModel):
     max_guests: int = Field(default=2, gt=0, le=20)
 
 app=FastAPI()
+register_exception_handlers(app)
 
 app.include_router(listing_router)
 app.include_router(booking_router)
+app.include_router(auth_router)
 
 from app.database import engine
 

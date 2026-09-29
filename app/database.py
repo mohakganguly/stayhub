@@ -1,12 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from app.config import settings
 
-DATABASE_URL = (
-    "postgresql://stayhub:stayhub_password"
-    "@localhost:5433/stayhub"
-)
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(settings.database_url)
 
 SessionLocal = sessionmaker(
     bind=engine,
